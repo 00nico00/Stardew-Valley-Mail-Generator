@@ -1,0 +1,8 @@
+{
+    "background_path": "mail.png", 
+    "font_name": "arial.ttf",     
+    "font_size": 24,
+    "margin_left": 10,           
+    "margin_top": 5,             
+    "margin_right": 10           
+}
