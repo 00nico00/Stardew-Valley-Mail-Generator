@@ -1,12 +1,14 @@
 # 星露谷信件生成器
 
+[English](./README_EN.md) | 简体中文
+
 <div style="text-align:center">
   <img src="./example_output/result.png" alt="星露谷信件生成器" />
 </div>
 
-<div style="text-align:center">
+<p style="text-align:center">
   自定义生成星露谷信件图片
-</div>
+</p>
 
 ## 安装依赖
 
@@ -39,7 +41,7 @@ mail_generator/
 ### 配置文件说明
 
 #### generate_setting.json
-```json
+```text
 {
     "background_path": "mail.png",      // 背景图片名字，存放在 images/
     "use_system_font": false,           // 是否使用系统字体
@@ -55,7 +57,7 @@ mail_generator/
 ```
 
 其中，文字颜色支持 RGB 和 十六进制表示
-```json
+```text
 {
     "text_color": [108, 79, 45],     // ok
     "text_color": "#6C4F2D"          // ok
@@ -71,7 +73,7 @@ mail_generator/
 }
 ```
 
-2. 运行程序
+### 运行程序
 
 ```bash
 python src/generator.py
@@ -80,6 +82,6 @@ python src/generator.py
 生成的图片将保存在 `output/result.png`
 
 ## 更新计划
-- 增加 PC 的 GUI 版本。
-- 增加 星露谷原信件含有的 附有xxx 内容
+- 增加 PC 的 GUI 版本
+- 增加星露谷原信件含有的"附有xxx"内容
 - 使用 React Native 重写，发布安卓移动版应用
