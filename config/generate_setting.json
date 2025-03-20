@@ -1,8 +1,12 @@
 {
-    "background_path": "mail.png", 
-    "font_name": "arial.ttf",     
-    "font_size": 24,
-    "margin_left": 10,           
-    "margin_top": 5,             
-    "margin_right": 10           
+    "background_path": "mail.png",
+    "use_system_font": false,
+    "font_path": "Kingnammm-Maiyuan.ttf",
+    "font_size": 27,
+    "margin_left": 7,
+    "margin_top": 7,
+    "margin_right": 7,
+    "paragraph_spacing": 10,
+    "line_spacing": 8,
+    "text_color": [108, 79, 45]
 }

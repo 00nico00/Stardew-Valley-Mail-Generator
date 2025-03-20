@@ -1,130 +1,162 @@
-from PIL import Image, ImageDraw, ImageFont
-import json
+from PIL import ImageDraw
 import os
 
-def load_config(config_path):
-    with open(config_path, "r", encoding="utf-8") as file:
-        return json.load(file)
+class TextGenerator:
+    OUTPUT_PATH = 'output/result.png'
+    DEFAULT_PARAGRAPH_SPACING = 10      # 默认段落间距
+    DEFAULT_LINE_SPACING = 8            # 默认行间距
+    DEFAULT_TEXT_COLOR = (108, 79, 45)  # 默认文字颜色
 
-def calculate_margins(bg_width, bg_height, settings):
-    left = bg_width * settings["margin_left"] / 100
-    top = bg_height * settings["margin_top"] / 100
-    right = bg_width * settings["margin_right"] / 100
+    def __init__(self, settings, content, image, font):
+        self.settings = settings
+        self.content = content
+        self.image = image
+        self.font = font
+        self.draw = ImageDraw.Draw(image)
+        self.width, self.height = image.size
+        self.margins = self._calculate_margins()
+        self.text_area_width = self.width - self.margins[0] - self.margins[2]
+        self.current_y = self.margins[1]  # 从顶部边距开始
 
-    return left, top, right
+        self.paragraph_spacing = settings.get('paragraph_spacing', self.DEFAULT_PARAGRAPH_SPACING)
+        self.line_spacing = settings.get('line_spacing', self.DEFAULT_LINE_SPACING)
+        self.text_color = self._parse_color(settings.get('text_color', self.DEFAULT_TEXT_COLOR))
 
-def wrap_text(text, font, max_width):
-    """自动换行文本，基于实际像素宽度"""
-    lines = []
-    words = text.split()
-    current_line = []
+    def _calculate_margins(self):
+        left = self.width * self.settings["margin_left"] / 100
+        top = self.height * self.settings["margin_top"] / 100
+        right = self.width * self.settings["margin_right"] / 100
+        return left, top, right
 
-    for word in words:
-        # 检查当前行加上新词后的宽度
-        test_line = ' '.join(current_line + [word])
-        test_width = font.getlength(test_line)
-        if test_width <= max_width:
-            current_line.append(word)
-        else:
-            if current_line:
-                lines.append(' '.join(current_line))
-                current_line = [word]
+    def _wrap_text(self, text, max_width):
+        if not text:
+            return []
+
+        lines = []
+        current_line = ""
+        
+        # 处理英文单词
+        words = []
+        temp_word = ""
+        
+        # 将文本分割成单词（英文）和单字符（中文）
+        for char in text:
+            if ord(char) < 128:  # ASCII字符
+                if char.isspace():
+                    if temp_word:
+                        words.append(temp_word)
+                        temp_word = ""
+                    words.append(char)
+                else:
+                    temp_word += char
+            else:  # 非ASCII字符（如中文）
+                if temp_word:
+                    words.append(temp_word)
+                    temp_word = ""
+                words.append(char)
+        
+        if temp_word:
+            words.append(temp_word)
+        
+        # 处理换行
+        for word in words:
+            test_line = current_line + word
+            test_width = self.font.getlength(test_line)
+            
+            if test_width <= max_width:
+                current_line = test_line
             else:
-                # 单个词超过行宽，强制分割
-                lines.append(word)
-                current_line = []
-    if current_line:
-        lines.append(' '.join(current_line))
-    return lines
+                if current_line:
+                    lines.append(current_line.strip())
+                    current_line = word
+                else:
+                    # 单个词超过宽度，需要按字符拆分
+                    for char in word:
+                        char_width = self.font.getlength(char)
+                        if char_width <= max_width:
+                            if current_line:
+                                test_line = current_line + char
+                                test_width = self.font.getlength(test_line)
+                                if test_width <= max_width:
+                                    current_line = test_line
+                                else:
+                                    lines.append(current_line.strip())
+                                    current_line = char
+                            else:
+                                current_line = char
+                        else:
+                            if current_line:
+                                lines.append(current_line.strip())
+                            lines.append(char)
+                            current_line = ""
+        
+        if current_line:
+            lines.append(current_line.strip())
+        
+        return lines
 
-def draw_text_element(draw, text, font, position, max_width, line_spacing=10, align='left'):
-    """绘制文本元素（自动换行）"""
-    x, y = position
-    lines = wrap_text(text, font, max_width)
-    
-    for line in lines:
-        line_width = font.getlength(line)
-        if align == 'center':
-            x_offset = (max_width - line_width) / 2
-        elif align == 'right':
-            x_offset = max_width - line_width
-        else:  # left
-            x_offset = 0
-        draw.text((x + x_offset, y), line, font=font, fill='black')
-        y += font.size + line_spacing
-    return y  # 返回最终的y坐标
+    def _draw_text_element(self, text, position, max_width, line_spacing=None, align='left'):
+        x, y = position
+        lines = self._wrap_text(text, max_width)
+        
+        # 使用传入的行间距或默认值
+        line_spacing = line_spacing if line_spacing is not None else self.line_spacing
+        
+        for line in lines:
+            line_width = self.font.getlength(line)
+            if align == 'center':
+                x_offset = (max_width - line_width) / 2
+            elif align == 'right':
+                x_offset = max_width - line_width
+            else:  # left
+                x_offset = 0
+            self.draw.text((x + x_offset, y), line, font=self.font, fill=self.text_color)
+            y += self.font.size + line_spacing
+        return y  # 返回最终的y坐标
 
-def main():
-    # 加载配置
-    generate_settings = load_config('config/generate_setting.json')
-    mail_content = load_config('config/mail_content.json')
+    def draw_title(self):
+        if 'title' in self.content:
+            self.current_y = self._draw_text_element(
+                self.content['title'],
+                position=(self.margins[0], self.current_y),
+                max_width=self.text_area_width,
+                align='left'
+            ) + self.paragraph_spacing
 
-    # 加载背景图
-    bg_path = os.path.join('images', generate_settings['background_path'])
-    if not os.path.exists(bg_path):
-        raise FileNotFoundError(f"背景图不存在：{bg_path}")
-    bg_image = Image.open(bg_path)
-    bg_width, bg_height = bg_image.size
+    def draw_paragraphs(self):
+        if 'paragraph' in self.content:
+            paragraphs = self.content['paragraph'].split('\n')
+            for p in paragraphs:
+                if p.strip():
+                    self.current_y = self._draw_text_element(
+                        p,
+                        position=(self.margins[0], self.current_y),
+                        max_width=self.text_area_width,
+                        align='left'
+                    ) + self.paragraph_spacing
 
-    # 计算边距和文本区域
-    left_margin, top_margin, right_margin = calculate_margins(bg_width, bg_height, generate_settings)
-    text_area_width = bg_width - left_margin - right_margin
+    def draw_signature(self):
+        if 'sign' in self.content:
+            self._draw_text_element(
+                self.content['sign'],
+                position=(self.margins[0], self.current_y),
+                max_width=self.text_area_width,
+                align='left'
+            )
 
-    # 加载字体
-    font_size = generate_settings['font_size']
-    font_name = generate_settings['font_name']
-    try:
-        font = ImageFont.truetype(font_name, font_size)
-    except IOError:
-        # 回退到默认字体
-        print(f"找不到字体\"{font_name}\", 已更换为默认字体")
-        font = ImageFont.load_default(size=font_size)
+    def save_image(self, output_path=OUTPUT_PATH):
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        self.image.save(output_path)
+        print(f"图片已生成至：{output_path}")
 
-    draw = ImageDraw.Draw(bg_image)
-
-    # 初始绘制位置
-    current_y = top_margin
-
-    # 绘制标题（居中）
-    if 'title' in mail_content:
-        title = mail_content['title']
-        current_y = draw_text_element(
-            draw, title, font,
-            position=(left_margin, current_y),
-            max_width=text_area_width,
-            align='center'
-        ) + 20  # 增加段落间距
-
-    # 绘制段落（左对齐）
-    if 'paragraph' in mail_content:
-        paragraph = mail_content['paragraph']
-        current_y = draw_text_element(
-            draw, paragraph, font,
-            position=(left_margin, current_y),
-            max_width=text_area_width,
-            align='left'
-        ) + 20
-
-    # 绘制落款（右对齐）
-    if 'sign' in mail_content:
-        sign = mail_content['sign']
-        # 计算落款位置（从底部向上）
-        sign_lines = wrap_text(sign, font, text_area_width)
-        sign_height = len(sign_lines) * (font.size + 10)
-        sign_y = bg_height - generate_settings.get('bottom_margin', 50) - sign_height
-        draw_text_element(
-            draw, sign, font,
-            position=(left_margin, sign_y),
-            max_width=text_area_width,
-            align='right'
-        )
-
-    # 保存结果
-    output_dir = 'output'
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, 'result.png')
-    bg_image.save(output_path)
-    print(f"图片已生成至：{output_path}")
-
-if __name__ == '__main__':
-    main()
+    def _parse_color(self, color):
+        if isinstance(color, (tuple, list)) and len(color) >= 3:
+            # RGB或RGBA元组
+            return tuple(int(c) for c in color[:3])
+        elif isinstance(color, str) and color.startswith('#'):
+            # 十六进制颜色代码
+            color = color.lstrip('#')
+            if len(color) == 6:
+                return tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
+        # 如果无法解析，返回默认颜色
+        return self.DEFAULT_TEXT_COLOR 
